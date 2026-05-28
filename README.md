@@ -59,7 +59,7 @@ If you'd like a split version (separate HTML, CSS, and JS) for easier long-term 
 
 ## License
 
-MIT License
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
