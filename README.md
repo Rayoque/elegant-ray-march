@@ -4,6 +4,8 @@ A compact, elegant real-time ray marcher built entirely in WebGL using signed di
 
 **Live Demo:** [https://rayoque.github.io/elegant-ray-march](https://rayoque.github.io/elegant-ray-march)
 
+![Elegant Ray March](assets/screenshot.png)
+
 ## Features
 
 - **Pure GPU rendering** — All ray marching and shading happens in the fragment shader
@@ -56,6 +58,10 @@ python -m http.server 8000
 This project is deliberately maintained as one self-contained HTML file. There are no build tools, bundlers, or separate CSS/JS files. This makes it trivial to host, share, or fork.
 
 If you'd like a split version (separate HTML, CSS, and JS) for easier long-term maintenance, let me know.
+
+## Acknowledgments
+
+This project was developed with assistance from **Grok Build** (by xAI).
 
 ## License
 
