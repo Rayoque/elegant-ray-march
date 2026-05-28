@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ray March • Elegantly Sophisticated</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+    
+    :root {
+      --accent: #22d3ee;
+    }
+    
+    body {
+      font-family: 'Inter', system_ui, sans-serif;
+    }
+    
+    .font-display {
+      font-family: 'Space Grotesk', 'Inter', system_ui, sans-serif;
+      font-feature-settings: "ss02";
+    }
+
+    #glCanvas {
+      display: block;
+      image-rendering: pixelated;
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
+      border: 1px solid #272b33;
+    }
+
+    .panel {
+      background: rgba(17, 19, 25, 0.92);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(63, 66, 79, 0.6);
+    }
+
+    .section-title {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+      color: #64748b;
+    }
+
+    .control-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+
+    .elegant-shadow {
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3),
+                  0 4px 6px -4px rgb(0 0 0 / 0.3);
+    }
+
+
+
+    /* Super simple two-state sidebar (open or closed). No dragging. */
+    #sidebar {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100%;
+      background: #111317;
+      border-left: 1px solid #3a3f49;
+      display: flex;
+      flex-direction: column;
+      z-index: 40;
+      overflow-x: hidden;
+      overflow-y: hidden; /* closed by default */
+    }
+
+    #sidebar.open {
+      overflow-y: auto; /* scrollable when open, for small screens */
+    }
+
+    #sidebar.open {
+      transform: translateX(0);
+    }
+
+    #sidebar.closed {
+      transform: translateX(100%);
+    }
+
+    /* Simple fixed handle that lives on the right edge of the screen */
+    #sidebar-drawer-handle {
+      position: fixed;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 64px;
+      background: #1f232b;
+      border: 1px solid #3a3f49;
+      border-right: none;
+      border-radius: 9999px 0 0 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 50;
+      user-select: none;
+      box-shadow: -2px 0 8px rgba(0,0,0,0.45);
+    }
+
+    #sidebar-drawer-handle:hover {
+      background: #252a33;
+    }
+
+    /* When the sidebar is open, move the handle left so it sits against the panel */
+    #sidebar.open + #sidebar-drawer-handle {
+      right: 320px;
+    }
+  </style>
+</head>
+<body class="bg-[#0a0b0f] text-slate-200 overflow-hidden">
+  <div class="flex h-screen">
+    <!-- Main Canvas Area -->
+    <div class="flex-1 relative flex items-center justify-center p-6 bg-[#0a0b0f]">
+      <!-- Canvas Container -->
+      <div class="relative">
+        <canvas id="glCanvas" width="800" height="600" 
+                class="rounded-2xl bg-black"
+                style="image-rendering: pixelated;"></canvas>
+        
+        <!-- Subtle overlay labels -->
+        <div class="absolute top-4 left-4 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+          <span class="text-xs font-medium tracking-wider text-emerald-300/90">REAL-TIME RAY MARCHING</span>
+        </div>
+
+        <div class="absolute bottom-4 right-4 px-3 py-1 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-[10px] text-slate-400 flex items-center gap-1.5">
+          <span id="resolutionLabel">720×540</span>
+          <span class="text-slate-600">•</span>
+          <span id="fpsLabel" class="font-medium text-emerald-400/90 tabular-nums">60</span>
+          <span class="text-slate-600">fps</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div id="sidebar" class="closed">
+      <!-- Header -->
+      <div class="px-6 pt-6 pb-5 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-cyan-400 to-teal-400 flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0b0f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 3v18M3 12h18"/>
+            </svg>
+          </div>
+          <div>
+            <div class="font-display text-2xl font-semibold tracking-tighter">Ray March</div>
+            <div class="text-[10px] text-slate-500 -mt-0.5 tracking-[0.5px]">SDF RAY TRACER</div>
+          </div>
+        </div>
+        <div class="mt-4 text-xs text-slate-400 leading-relaxed">
+          A compact, high-fidelity real-time ray marcher using signed distance fields.
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="px-6 py-4 border-b border-slate-800 grid grid-cols-3 gap-2">
+        <div class="panel rounded-2xl p-3">
+          <div class="section-title mb-1">Steps</div>
+          <div id="stepsValue" class="text-2xl font-semibold tabular-nums text-white">48</div>
+          <div class="text-[10px] text-slate-500">per ray</div>
+        </div>
+        <div class="panel rounded-2xl p-3">
+          <div class="section-title mb-1">Bounces</div>
+          <div id="bouncesValue" class="text-2xl font-semibold tabular-nums text-white">2</div>
+          <div class="text-[10px] text-slate-500">reflections</div>
+        </div>
+        <div class="panel rounded-2xl p-3">
+          <div class="section-title mb-1">Objects</div>
+          <div id="objectsValue" class="text-2xl font-semibold tabular-nums text-white">9</div>
+          <div class="text-[10px] text-slate-500">SDF primitives</div>
+        </div>
+      </div>
+
+      <!-- Quality Controls -->
+      <div class="px-6 py-5 space-y-5 border-b border-slate-800">
+        <div>
+          <div class="flex justify-between items-baseline mb-2">
+            <div class="control-label">Render Scale</div>
+            <div id="scaleValue" class="value">1.0×</div>
+          </div>
+          <input type="range" id="scaleSlider" min="0.4" max="1.0" step="0.05" value="0.85"
+                 class="w-full accent-cyan-400">
+          <div class="flex justify-between text-[10px] text-slate-600 mt-0.5">
+            <div>Fast</div><div>Crisp</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between items-baseline mb-2">
+            <div class="control-label">Max March Steps</div>
+            <div id="stepsSliderValue" class="value">48</div>
+          </div>
+          <input type="range" id="stepsSlider" min="24" max="128" step="4" value="48"
+                 class="w-full accent-cyan-400">
+        </div>
+
+        <div>
+          <div class="flex justify-between items-baseline mb-2">
+            <div class="control-label">Reflection Bounces</div>
+            <div id="bounceSliderValue" class="value">2</div>
+          </div>
+          <input type="range" id="bounceSlider" min="0" max="3" step="1" value="2"
+                 class="w-full accent-cyan-400">
+        </div>
+
+        <div>
+          <div class="flex justify-between items-baseline mb-2">
+            <div class="control-label">Soft Shadow Quality</div>
+            <div id="shadowValue" class="value">2×</div>
+          </div>
+          <input type="range" id="shadowSlider" min="1" max="4" step="1" value="2"
+                 class="w-full accent-cyan-400">
+        </div>
+      </div>
+
+      <!-- Material & Lighting -->
+      <div class="px-6 py-5 space-y-5 border-b border-slate-800">
+        <div>
+          <div class="control-label mb-2.5">Lighting &amp; Materials</div>
+          
+          <div class="space-y-4">
+            <div>
+              <div class="flex justify-between text-xs mb-1.5">
+                <span class="text-slate-400">Sun Intensity</span>
+                <span id="sunValue" class="value">1.00</span>
+              </div>
+              <input type="range" id="sunSlider" min="0.2" max="2.0" step="0.05" value="1.0"
+                     class="w-full accent-amber-400">
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1.5">
+                <span class="text-slate-400">Ambient Occlusion</span>
+                <span id="aoValue" class="value">0.85</span>
+              </div>
+              <input type="range" id="aoSlider" min="0" max="1.2" step="0.05" value="0.85"
+                     class="w-full accent-violet-400">
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1.5">
+                <span class="text-slate-400">Specular Highlights</span>
+                <span id="specValue" class="value">0.95</span>
+              </div>
+              <input type="range" id="specSlider" min="0.3" max="1.4" step="0.05" value="0.95"
+                     class="w-full accent-rose-400">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene buttons -->
+      <div class="px-6 py-4 border-t border-slate-800 grid grid-cols-2 gap-2">
+        <button onclick="loadPreset(0)" 
+                class="px-3 py-2 text-xs font-medium bg-slate-800 hover:bg-slate-700 active:bg-slate-900 transition-colors rounded-xl border border-slate-700">
+          Classic
+        </button>
+        <button onclick="loadPreset(1)" 
+                class="px-3 py-2 text-xs font-medium bg-slate-800 hover:bg-slate-700 active:bg-slate-900 transition-colors rounded-xl border border-slate-700">
+          Sculpture
+        </button>
+      </div>
+
+      <div class="px-6 py-4 border-t border-slate-800 text-[10px]">
+        <div class="flex items-center justify-between text-slate-500">
+          <div>Drag to orbit • Scroll to zoom</div>
+          <button onclick="resetCamera()" 
+                  class="font-medium text-cyan-400 hover:text-cyan-300 transition-colors">Reset view</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Educational footer -->
+  <div class="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 text-center">
+    <div onclick="showConcepts()" 
+         class="inline-flex items-center gap-2 text-[10px] text-slate-400 hover:text-slate-300 cursor-pointer transition-colors">
+      <span>How this works</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4v1m0 4v1m4-4v1m-4 4v1" />
+      </svg>
+    </div>
+  </div>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // ==================== WEBGL + RAY MARCHER ====================
+    const canvas = document.getElementById('glCanvas');
+    let gl = null;
+    let program = null;
+    let startTime = Date.now();
+    let frameCount = 0;
+    let lastFpsUpdate = Date.now();
+    let currentFps = 60;
+
+    // Camera state (spherical)
+    let camTheta = 0.9;     // azimuth
+    let camPhi = 1.15;      // elevation
+    let camRadius = 9.0;
+    let targetX = 0.0;
+    let targetY = 1.2;
+    let targetZ = 0.0;
+
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    // Smooth WASD movement
+    const keys = {};
+    let moveVelX = 0;
+    let moveVelZ = 0;
+    let moveVelY = 0;
+
+    // Uniform locations
+    let uTime, uResolution, uCamPos, uCamDir, uCamUp, uCamRight;
+    let uScale, uMaxSteps, uBounces, uShadowSamples;
+    let uSunIntensity, uAO, uSpecular;
+    let uPreset;
+
+    // Current quality settings
+    let quality = {
+      scale: 0.85,
+      maxSteps: 48,
+      bounces: 2,
+      shadowSamples: 2,
+      sunIntensity: 1.0,
+      ao: 0.85,
+      specular: 0.95
+    };
+
+    let currentPreset = 0;
+
+    // Target aspect ratio for the viewport (4:3 feels good for this scene)
+    const VIEWPORT_ASPECT = 4 / 3;
+    const MAX_DISPLAY_WIDTH = 1080;   // Don't let it get ridiculously huge on big screens/fullscreen
+
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    }
+
+    function createProgram(gl, vsSource, fsSource) {
+      const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+      const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+      if (!vs || !fs) return null;
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(prog));
+        gl.deleteProgram(prog);
+        return null;
+      }
+      return prog;
+    }
+
+    const vertexShaderSource = `
+      attribute vec2 aPosition;
+      varying vec2 vUv;
+      void main() {
+        vUv = aPosition * 0.5 + 0.5;
+        gl_Position = vec4(aPosition, 0.0, 1.0);
+      }
+    `;
+
+    // ===================== THE HEART: ELEGANT RAY MARCHER =====================
+    const fragmentShaderSource = `
+      precision highp float;
+
+      varying vec2 vUv;
+
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform vec3 uCamPos;
+      uniform vec3 uCamDir;
+      uniform vec3 uCamUp;
+      uniform vec3 uCamRight;
+      uniform float uScale;
+      uniform int uMaxSteps;
+      uniform int uBounces;
+      uniform int uShadowSamples;
+      uniform float uSunIntensity;
+      uniform float uAO;
+      uniform float uSpecular;
+      uniform int uPreset;
+
+      const float PI = 3.14159265359;
+      const float MAX_DIST = 120.0;
+      const float EPS = 0.0015;
+      const float SHADOW_SOFTNESS = 0.035;
+
+      float sdSphere(vec3 p, float r) {
+        return length(p) - r;
+      }
+
+      float sdPlane(vec3 p) {
+        return p.y;
+      }
+
+      float sdBox(vec3 p, vec3 b) {
+        vec3 q = abs(p) - b;
+        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+      }
+
+      float sdRoundedBox(vec3 p, vec3 b, float r) {
+        vec3 q = abs(p) - b;
+        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
+      }
+
+      float sdCylinder(vec3 p, float r, float h) {
+        vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+        return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+      }
+
+      float opSmoothUnion(float d1, float d2, float k) {
+        float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
+        return mix(d2, d1, h) - k * h * (1.0 - h);
+      }
+
+      vec2 map(vec3 p) {
+        float d = MAX_DIST;
+        float mat = 0.0;
+
+        // Ground plane with very subtle procedural detail
+        float ground = sdPlane(p);
+        if (ground < d) {
+          d = ground;
+          mat = 1.0; // ground
+        }
+
+        int preset = uPreset;
+
+        if (preset == 0) {
+          // Classic
+          float s0 = sdSphere(p - vec3(-2.6, 1.8, 0.8), 1.75);
+          if (s0 < d) { d = s0; mat = 2.0; }
+
+          float s1 = sdSphere(p - vec3(2.1, 1.65, -1.4), 1.6);
+          if (s1 < d) { d = s1; mat = 3.0; }
+
+          float s2 = sdSphere(p - vec3(3.4, 0.9, 2.3), 0.85);
+          if (s2 < d) { d = s2; mat = 4.0; }
+
+          float s3 = sdSphere(p - vec3(-0.4, 1.1, -3.1), 1.1);
+          if (s3 < d) { d = s3; mat = 5.0; }
+
+          float s4 = sdSphere(p - vec3(-3.8, 0.7, -1.9), 0.7);
+          if (s4 < d) { d = s4; mat = 2.0; }
+        } else {
+          // Sculpture (the moving one)
+          vec3 cp = p - vec3(0.0, 2.1, 0.0);
+          float box = sdRoundedBox(cp, vec3(0.65, 2.0, 0.65), 0.4);
+          float cyl = sdCylinder(cp.xzy, 0.48, 2.6);
+          float core = opSmoothUnion(box, cyl, 0.55);
+
+          float orbit = length(p.xz - vec2(sin(uTime * 0.4) * 3.6, cos(uTime * 0.4) * 3.6)) - 0.9;
+          float orbiting = sdSphere(p - vec3(sin(uTime * 0.4) * 3.6, 1.8, cos(uTime * 0.4) * 3.6), 0.9);
+
+          if (core < d) { d = core; mat = 6.0; }
+          if (orbiting < d) { d = orbiting; mat = 3.0; }
+
+          float base = sdBox(p - vec3(0.0, 0.3, 0.0), vec3(4.5, 0.28, 4.5));
+          if (base < d) { d = base; mat = 2.0; }
+        }
+
+        // Tiny accent sphere
+        float tiny = sdSphere(p - vec3(1.8, 0.55, -4.2), 0.5);
+        if (tiny < d) { d = tiny; mat = 4.0; }
+
+        return vec2(d, mat);
+      }
+
+
+      vec3 calcNormal(vec3 p) {
+        float h = 0.001;
+        vec3 n = vec3(
+          map(p + vec3(h, 0, 0)).x - map(p - vec3(h, 0, 0)).x,
+          map(p + vec3(0, h, 0)).x - map(p - vec3(0, h, 0)).x,
+          map(p + vec3(0, 0, h)).x - map(p - vec3(0, 0, h)).x
+        );
+        return normalize(n);
+      }
+
+      // Core ray marcher (the elegant heart of the simulator)
+      vec2 rayMarch(vec3 ro, vec3 rd, float maxDist, int maxSteps) {
+        float t = 0.0;
+        float mat = 0.0;
+        for (int i = 0; i < 128; i++) {
+          if (i >= maxSteps) break;
+          vec3 p = ro + rd * t;
+          vec2 res = map(p);
+          float d = res.x;
+          mat = res.y;
+
+          if (d < EPS) break;
+          t += d * 0.92; // slight understep for stability
+          if (t > maxDist) break;
+        }
+        return vec2(t, mat);
+      }
+
+      // Soft shadow using multiple shadow rays with increasing penumbra
+      float softShadow(vec3 ro, vec3 rd, float mint, float maxt, float k, int samples) {
+        float res = 1.0;
+        float t = mint;
+        for (int i = 0; i < 6; i++) {
+          if (i >= samples) break;
+          vec3 p = ro + rd * t;
+          float d = map(p).x;
+          if (d < EPS) return 0.08;
+          res = min(res, k * d / t);
+          t += d * (1.0 + float(i) * 0.15);
+          if (t > maxt) break;
+        }
+        return clamp(res, 0.08, 1.0);
+      }
+
+      // Cheap but beautiful ambient occlusion
+      float ambientOcclusion(vec3 p, vec3 n) {
+        float ao = 0.0;
+        float step = 0.18;
+        for (int i = 0; i < 5; i++) {
+          float off = step * (float(i) + 0.6);
+          float d = map(p + n * off).x;
+          ao += (off - d) * (1.0 / (1.0 + off * 1.8));
+        }
+        return 1.0 - clamp(ao * uAO * 0.45, 0.0, 0.95);
+      }
+
+
+      vec3 getMaterialColor(float mat) {
+        if (mat < 1.5) return vec3(0.82, 0.78, 0.71);          // ground
+        if (mat < 2.5) return vec3(0.72, 0.28, 0.26);          // red matte
+        if (mat < 3.5) return vec3(0.92, 0.94, 0.97);          // chrome
+        if (mat < 4.5) return vec3(0.96, 0.82, 0.48);          // gold
+        if (mat < 5.5) return vec3(0.35, 0.58, 0.92);          // blue glass
+        return vec3(0.58, 0.62, 0.68);                         // sculpture / neutral
+        // material 8 (dickbutt stamp) is handled specially in shade() with texture
+      }
+
+      vec3 shade(vec3 ro, vec3 rd, float t, float matID, vec3 sunDir) {
+        vec3 p = ro + rd * t;
+        vec3 n = calcNormal(p);
+
+        vec3 col = getMaterialColor(matID);
+
+        // Ground checker pattern (subtle elegance)
+        if (matID < 1.5) {
+          float checker = mod(floor(p.x * 0.6) + floor(p.z * 0.6), 2.0);
+          col = mix(vec3(0.68, 0.65, 0.59), vec3(0.88, 0.85, 0.78), checker);
+        }
+
+        vec3 viewDir = -rd;
+        vec3 halfV = normalize(sunDir + viewDir);
+
+        float NdotL = max(dot(n, sunDir), 0.0);
+        float spec = pow(max(dot(n, halfV), 0.0), mix(18.0, 72.0, uSpecular - 0.3));
+
+        // Sun lighting with soft shadows
+        float shadow = softShadow(p + n * 0.02, sunDir, 0.03, 42.0, 18.0, uShadowSamples);
+        float sunLight = NdotL * shadow * uSunIntensity;
+
+        // Beautiful ambient + hemisphere
+        float ao = ambientOcclusion(p, n);
+        vec3 ambient = mix(vec3(0.06, 0.07, 0.09), vec3(0.14, 0.17, 0.22), (n.y * 0.5 + 0.5)) * 0.6;
+
+        // Material-specific shading
+        float metallic = 0.0;
+        float roughness = 0.85;
+
+        if (matID > 2.5 && matID < 3.5) { metallic = 0.95; roughness = 0.1; } // chrome
+        if (matID > 3.5 && matID < 4.5) { metallic = 0.85; roughness = 0.2; } // gold
+        if (matID > 4.5 && matID < 5.5) { metallic = 0.1;  roughness = 0.05; } // glass
+
+        vec3 diffuse = col * (ambient + sunLight * 1.15);
+        vec3 specular = mix(vec3(0.6), col, metallic) * spec * (0.7 + metallic * 0.6) * shadow * uSpecular;
+
+        vec3 final = diffuse + specular;
+
+        // Very subtle rim light
+        float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 4.5);
+        final += rim * vec3(0.15, 0.18, 0.22) * (0.6 + metallic * 0.4);
+
+        // Fresnel for reflections (especially metals & glass)
+        float fresnel = pow(1.0 - max(dot(n, viewDir), 0.0), 4.5);
+        final = mix(final, vec3(0.92), fresnel * metallic * 0.55);
+
+        final *= ao;
+
+        // Very gentle distance fog
+        float fog = 1.0 - smoothstep(22.0, 68.0, t);
+        final = mix(vec3(0.04, 0.045, 0.055), final, fog);
+
+        return final;
+      }
+
+
+      void main() {
+        // Screen UV with aspect correction
+        vec2 uv = (vUv - 0.5) * 2.0;
+        uv.x *= uResolution.x / uResolution.y;
+
+        // Ray setup from camera
+        vec3 rd = normalize(uCamDir + uv.x * uCamRight + uv.y * uCamUp);
+
+        vec3 sunDir = normalize(vec3(0.6, 1.05, -0.35));
+
+        // Primary ray march
+        vec2 hit = rayMarch(uCamPos, rd, MAX_DIST, uMaxSteps);
+        float t = hit.x;
+        float matID = hit.y;
+
+        vec3 color = vec3(0.035, 0.038, 0.048); // beautiful deep background
+
+        if (t < MAX_DIST - 1.0) {
+          color = shade(uCamPos, rd, t, matID, sunDir);
+
+          // Reflection bounces (the sophisticated part)
+          if (uBounces > 0) {
+            vec3 p = uCamPos + rd * t;
+            vec3 n = calcNormal(p);
+            vec3 reflDir = reflect(rd, n);
+
+            // First bounce
+            int reflSteps = uMaxSteps / 2;
+            if (reflSteps < 24) reflSteps = 24;
+            vec2 r1 = rayMarch(p + n * 0.025, reflDir, MAX_DIST * 0.6, reflSteps);
+            if (r1.x < MAX_DIST * 0.55) {
+              vec3 rCol = shade(p + n * 0.025, reflDir, r1.x, r1.y, sunDir);
+              color = mix(color, rCol, 0.48 + (matID > 2.5 ? 0.22 : 0.0));
+
+              // Second bounce
+              if (uBounces > 1) {
+                vec3 p2 = p + n * 0.025 + reflDir * r1.x;
+                vec3 n2 = calcNormal(p2);
+                vec3 refl2 = reflect(reflDir, n2);
+                vec2 r2 = rayMarch(p2 + n2 * 0.02, refl2, 38.0, 18);
+                if (r2.x < 36.0) {
+                  vec3 r2Col = shade(p2 + n2 * 0.02, refl2, r2.x, r2.y, sunDir);
+                  color = mix(color, r2Col, 0.26);
+
+                  // Third bounce
+                  if (uBounces > 2) {
+                    vec3 p3 = p2 + n2 * 0.02 + refl2 * r2.x;
+                    vec3 n3 = calcNormal(p3);
+                    vec3 refl3 = reflect(refl2, n3);
+                    vec2 r3 = rayMarch(p3 + n3 * 0.02, refl3, 28.0, 12);
+                    if (r3.x < 26.0) {
+                      vec3 r3Col = shade(p3 + n3 * 0.02, refl3, r3.x, r3.y, sunDir);
+                      color = mix(color, r3Col, 0.15);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Gentle ACES-inspired tone mapping + gamma
+        color = color / (color + 0.65);
+        color = pow(color, vec3(0.92));
+
+        // Very slight vignette for elegance
+        float vig = 1.0 - length(uv * 0.72) * 0.38;
+        color *= vig;
+
+        // Subtle color grading
+        color = mix(color, color * vec3(1.02, 0.99, 0.96), 0.2);
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    function initWebGL() {
+      gl = canvas.getContext('webgl2', { 
+        antialias: false, 
+        preserveDrawingBuffer: false,
+        powerPreference: "high-performance"
+      }) || canvas.getContext('webgl', { antialias: false });
+
+      if (!gl) {
+        alert("WebGL is not supported on this browser. This ray tracer requires WebGL.");
+        return false;
+      }
+
+      program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+      if (!program) return false;
+
+      gl.useProgram(program);
+
+      // Fullscreen quad
+      const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+      const aPos = gl.getAttribLocation(program, 'aPosition');
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+      // Cache all uniforms
+      uTime = gl.getUniformLocation(program, 'uTime');
+      uResolution = gl.getUniformLocation(program, 'uResolution');
+      uCamPos = gl.getUniformLocation(program, 'uCamPos');
+      uCamDir = gl.getUniformLocation(program, 'uCamDir');
+      uCamUp = gl.getUniformLocation(program, 'uCamUp');
+      uCamRight = gl.getUniformLocation(program, 'uCamRight');
+      uScale = gl.getUniformLocation(program, 'uScale');
+      uMaxSteps = gl.getUniformLocation(program, 'uMaxSteps');
+      uBounces = gl.getUniformLocation(program, 'uBounces');
+      uShadowSamples = gl.getUniformLocation(program, 'uShadowSamples');
+      uSunIntensity = gl.getUniformLocation(program, 'uSunIntensity');
+      uAO = gl.getUniformLocation(program, 'uAO');
+      uSpecular = gl.getUniformLocation(program, 'uSpecular');
+      uPreset = gl.getUniformLocation(program, 'uPreset');
+
+      // Initial values
+      gl.uniform1f(uScale, quality.scale);
+      gl.uniform1i(uMaxSteps, quality.maxSteps);
+      gl.uniform1i(uBounces, quality.bounces);
+      gl.uniform1i(uShadowSamples, quality.shadowSamples);
+      gl.uniform1f(uSunIntensity, quality.sunIntensity);
+      gl.uniform1f(uAO, quality.ao);
+      gl.uniform1f(uSpecular, quality.specular);
+      gl.uniform1i(uPreset, currentPreset);
+
+      window.addEventListener('resize', updateViewportSize);
+      updateViewportSize();
+
+      // Mouse controls
+      canvas.addEventListener('mousedown', onMouseDown);
+      window.addEventListener('mouseup', onMouseUp);
+      window.addEventListener('mousemove', onMouseMove);
+
+      canvas.addEventListener('wheel', onWheel, { passive: false });
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+      // Keyboard
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+
+      // Connect UI sliders
+      setupSliders();
+
+      // Start render loop
+      requestAnimationFrame(renderLoop);
+
+      // Load default scene
+      loadPreset(0);
+
+      return true;
+    }
+
+    // Current stable display size (CSS pixels). Updated only on window resize / layout changes.
+    let currentDisplayW = 720;
+    let currentDisplayH = 540;
+
+    function updateViewportSize() {
+      // Measure from the stable outer container (flex-1), not the immediate parent.
+      // This prevents feedback where the canvas size affects its own container.
+      const outer = canvas.closest('.flex-1') || canvas.parentElement;
+      const availW = Math.max(400, outer.clientWidth - 80);
+      const availH = Math.max(300, outer.clientHeight - 80);
+
+      let displayW = Math.min(availW, MAX_DISPLAY_WIDTH);
+      let displayH = displayW / VIEWPORT_ASPECT;
+
+      if (displayH > availH) {
+        displayH = availH;
+        displayW = displayH * VIEWPORT_ASPECT;
+      }
+
+      // Apply visible size
+      canvas.style.width = displayW + 'px';
+      canvas.style.height = displayH + 'px';
+
+      // Remember for the render scale slider
+      currentDisplayW = displayW;
+      currentDisplayH = displayH;
+
+      // Also update the internal resolution to match current scale
+      updateRenderResolution();
+    }
+
+    function updateRenderResolution() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.8);
+
+      const renderW = Math.floor(currentDisplayW * quality.scale * dpr);
+      const renderH = Math.floor(currentDisplayH * quality.scale * dpr);
+
+      if (canvas.width !== renderW || canvas.height !== renderH) {
+        canvas.width = renderW;
+        canvas.height = renderH;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      }
+
+      document.getElementById('resolutionLabel').textContent = 
+        `${canvas.width}×${canvas.height}`;
+    }
+
+    function getCameraVectors() {
+      const cosPhi = Math.cos(camPhi);
+      const sinPhi = Math.sin(camPhi);
+      const cosTheta = Math.cos(camTheta);
+      const sinTheta = Math.sin(camTheta);
+
+      // Keep the original spherical mapping so existing presets and feel don't break
+      const camPos = [
+        targetX + camRadius * cosPhi * sinTheta,
+        targetY + camRadius * sinPhi,
+        targetZ + camRadius * cosPhi * cosTheta
+      ];
+
+      // View direction (from camera toward target)
+      let dir = [
+        targetX - camPos[0],
+        targetY - camPos[1],
+        targetZ - camPos[2]
+      ];
+      const len = Math.hypot(dir[0], dir[1], dir[2]);
+      if (len > 1e-6) {
+        dir[0] /= len; dir[1] /= len; dir[2] /= len;
+      } else {
+        dir = [0, 0, -1];
+      }
+
+      // Proper orthonormal camera basis using world up.
+      // This prevents the twisting / flipping / event-horizon effect.
+      const worldUp = [0, 1, 0];
+
+      // right = cross(dir, worldUp)  (note the order for consistent handedness)
+      let right = [
+        dir[1] * worldUp[2] - dir[2] * worldUp[1],
+        dir[2] * worldUp[0] - dir[0] * worldUp[2],
+        dir[0] * worldUp[1] - dir[1] * worldUp[0]
+      ];
+      let rlen = Math.hypot(right[0], right[1], right[2]);
+      if (rlen > 1e-5) {
+        right[0] /= rlen; right[1] /= rlen; right[2] /= rlen;
+      } else {
+        // Camera looking straight up or down — pick an arbitrary stable right
+        right = [1, 0, 0];
+      }
+
+      // up = cross(right, dir)  — this keeps everything orthogonal and stable
+      let up = [
+        right[1] * dir[2] - right[2] * dir[1],
+        right[2] * dir[0] - right[0] * dir[2],
+        right[0] * dir[1] - right[1] * dir[0]
+      ];
+      const ulen = Math.hypot(up[0], up[1], up[2]);
+      if (ulen > 1e-5) {
+        up[0] /= ulen; up[1] /= ulen; up[2] /= ulen;
+      } else {
+        up = [0, 1, 0];
+      }
+
+      return { pos: camPos, dir, right, up };
+    }
+
+    function renderLoop() {
+      if (!gl || !program) return;
+
+      const now = Date.now();
+      const time = (now - startTime) / 1000.0;
+
+      // Smooth camera-relative movement with acceleration
+      const friction = 0.82;
+
+      // Separate speeds — forward/back is intentionally a bit slower than strafing
+      const strafeSpeed = keys['shift'] ? 0.52 : 0.16;
+      const forwardSpeed = keys['shift'] ? 0.38 : 0.11;   // reduced as requested
+
+      let desiredX = 0;
+      let desiredZ = 0;
+      let desiredY = 0;
+
+      const moveCam = getCameraVectors();
+
+      const fullForward = [...moveCam.dir];
+      const fl = Math.hypot(fullForward[0], fullForward[1], fullForward[2]);
+      if (fl > 0.0001) {
+        fullForward[0] /= fl; fullForward[1] /= fl; fullForward[2] /= fl;
+      }
+
+      // Horizontal forward (ignore pitch) for more comfortable ground-relative movement
+      const groundForward = [fullForward[0], 0, fullForward[2]];
+      const gfl = Math.hypot(groundForward[0], groundForward[2]);
+      if (gfl > 0.0001) {
+        groundForward[0] /= gfl;
+        groundForward[2] /= gfl;
+      }
+
+      const right = [moveCam.right[0], 0, moveCam.right[2]];
+      const rl = Math.hypot(right[0], right[2]);
+      if (rl > 0.0001) { right[0] /= rl; right[2] /= rl; }
+
+      const verticalFactor = 0.28; // how much the camera's actual pitch affects vertical movement
+
+      if (keys['w'] || keys['arrowup']) {
+        desiredX += groundForward[0] * (1 - verticalFactor) + fullForward[0] * verticalFactor;
+        desiredZ += groundForward[2] * (1 - verticalFactor) + fullForward[2] * verticalFactor;
+        desiredY += fullForward[1] * verticalFactor;
+      }
+      if (keys['s'] || keys['arrowdown']) {
+        desiredX -= groundForward[0] * (1 - verticalFactor) + fullForward[0] * verticalFactor;
+        desiredZ -= groundForward[2] * (1 - verticalFactor) + fullForward[2] * verticalFactor;
+        desiredY -= fullForward[1] * verticalFactor;
+      }
+      if (keys['a'] || keys['arrowleft']) { desiredX -= right[0]; desiredZ -= right[2]; }
+      if (keys['d'] || keys['arrowright']) { desiredX += right[0]; desiredZ += right[2]; }
+
+      // Normalize and scale (strafe uses full speed, forward uses reduced speed)
+      const horizLen = Math.hypot(desiredX, desiredZ);
+      if (horizLen > 0.0001) {
+        const strafeScale = strafeSpeed / horizLen;
+        desiredX *= strafeScale;
+        desiredZ *= strafeScale;
+      }
+
+      // Vertical from W/S is already scaled by verticalFactor above
+      desiredY *= forwardSpeed / 0.11; // normalize vertical influence to the forward speed
+
+      // Accelerate toward desired velocity
+      moveVelX = moveVelX * friction + desiredX * (1 - friction);
+      moveVelZ = moveVelZ * friction + desiredZ * (1 - friction);
+      moveVelY = moveVelY * friction + desiredY * (1 - friction);
+
+      targetX += moveVelX;
+      targetZ += moveVelZ;
+      targetY += moveVelY;
+
+      // Q/E for extra vertical control
+      if (keys['q']) targetY -= 0.14;
+      if (keys['e']) targetY += 0.14;
+
+      // FPS counter
+      frameCount++;
+      if (now - lastFpsUpdate > 450) {
+        currentFps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
+        document.getElementById('fpsLabel').textContent = currentFps;
+        frameCount = 0;
+        lastFpsUpdate = now;
+      }
+
+      const cam = getCameraVectors();
+
+      gl.uniform1f(uTime, time);
+      gl.uniform2f(uResolution, canvas.width, canvas.height);
+      gl.uniform3f(uCamPos, cam.pos[0], cam.pos[1], cam.pos[2]);
+      gl.uniform3f(uCamDir, cam.dir[0], cam.dir[1], cam.dir[2]);
+      gl.uniform3f(uCamRight, cam.right[0], cam.right[1], cam.right[2]);
+      gl.uniform3f(uCamUp, cam.up[0], cam.up[1], cam.up[2]);
+
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    // ==================== INTERACTION ====================
+    function onMouseDown(e) {
+      isDragging = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      canvas.style.cursor = 'grabbing';
+    }
+
+    function onMouseUp() {
+      isDragging = false;
+      canvas.style.cursor = 'default';
+    }
+
+    function onMouseMove(e) {
+      if (!isDragging) return;
+
+      const dx = e.clientX - lastMouseX;
+      const dy = e.clientY - lastMouseY;
+
+      camTheta -= dx * 0.0035;
+      camPhi -= dy * 0.0035;
+
+      // Horizon clamping: allow peeking just a little below the ground for the easter egg,
+      // but prevent flying way underneath.
+      const MIN_PHI = -1.62;   // ~ -93 degrees — just enough to see the dickbutt
+      const MAX_PHI = 1.48;
+      camPhi = Math.max(MIN_PHI, Math.min(MAX_PHI, camPhi));
+
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+    }
+
+    // ==================== JAVASCRIPT SDF FOR CURSOR PICKING ====================
+    // Simplified version of the GLSL scene for focus dolly ray marching
+    function onWheel(e) {
+      e.preventDefault();
+
+      const zoomIn = e.deltaY < 0;   // wheel up = zoom in
+
+      // Simple radius-based zoom (no cursor-based dolly)
+      camRadius = Math.max(0.6, Math.min(32, camRadius * (zoomIn ? 0.935 : 1.07)));
+    }
+
+    function onKeyDown(e) {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key.toLowerCase() === 'r') resetCamera();
+    }
+
+    function onKeyUp(e) {
+      keys[e.key.toLowerCase()] = false;
+    }
+
+    function setupSliders() {
+      const sliders = [
+        ['scaleSlider', 'scaleValue', v => {
+          quality.scale = parseFloat(v);
+          document.getElementById('scaleValue').textContent = quality.scale.toFixed(2) + '×';
+          // Only change internal resolution, do not re-measure the viewport
+          updateRenderResolution();
+        }],
+        ['stepsSlider', 'stepsSliderValue', v => {
+          quality.maxSteps = parseInt(v);
+          document.getElementById('stepsSliderValue').textContent = v;
+          document.getElementById('stepsValue').textContent = v;
+          gl.uniform1i(uMaxSteps, quality.maxSteps);
+        }],
+        ['bounceSlider', 'bounceSliderValue', v => {
+          quality.bounces = parseInt(v);
+          document.getElementById('bounceSliderValue').textContent = v;
+          document.getElementById('bouncesValue').textContent = v;
+          gl.uniform1i(uBounces, quality.bounces);
+        }],
+        ['shadowSlider', 'shadowValue', v => {
+          quality.shadowSamples = parseInt(v);
+          document.getElementById('shadowValue').textContent = v + '×';
+          gl.uniform1i(uShadowSamples, quality.shadowSamples);
+        }],
+        ['sunSlider', 'sunValue', v => {
+          quality.sunIntensity = parseFloat(v);
+          document.getElementById('sunValue').textContent = quality.sunIntensity.toFixed(2);
+          gl.uniform1f(uSunIntensity, quality.sunIntensity);
+        }],
+        ['aoSlider', 'aoValue', v => {
+          quality.ao = parseFloat(v);
+          document.getElementById('aoValue').textContent = quality.ao.toFixed(2);
+          gl.uniform1f(uAO, quality.ao);
+        }],
+        ['specSlider', 'specValue', v => {
+          quality.specular = parseFloat(v);
+          document.getElementById('specValue').textContent = quality.specular.toFixed(2);
+          gl.uniform1f(uSpecular, quality.specular);
+        }]
+      ];
+
+      sliders.forEach(([id, labelId, fn]) => {
+        const slider = document.getElementById(id);
+        if (!slider) return;
+        slider.addEventListener('input', () => fn(slider.value));
+        // Fire once to sync labels
+        fn(slider.value);
+      });
+    }
+
+    function updateObjectCount() {
+      const counts = [9, 6];
+      document.getElementById('objectsValue').textContent = counts[currentPreset] || 8;
+    }
+
+    function loadPreset(presetIndex) {
+      currentPreset = presetIndex;
+      gl.uniform1i(uPreset, currentPreset);
+
+      // Two nice camera positions
+      if (presetIndex === 0) {
+        // Classic
+        camTheta = 0.95; camPhi = 1.05; camRadius = 9.2;
+        targetX = 0.1; targetY = 1.35; targetZ = 0.6;
+      } else {
+        // Sculpture
+        camTheta = 2.1; camPhi = 0.75; camRadius = 10.5;
+        targetX = 0.0; targetY = 1.8; targetZ = 0.0;
+      }
+
+      updateObjectCount();
+    }
+
+    function resetCamera() {
+      loadPreset(currentPreset);
+    }
+
+    // ==================== SIMPLE TWO-STATE SIDEBAR ====================
+    // No dragging — just click the handle to toggle open/closed.
+
+    function initSidebarDrawer() {
+      const sidebar = document.getElementById('sidebar');
+
+      // Create a reliable fixed handle (always outside the sidebar flow)
+      let handle = document.getElementById('sidebar-drawer-handle');
+      if (!handle) {
+        handle = document.createElement('div');
+        handle.id = 'sidebar-drawer-handle';
+        handle.innerHTML = `<span id="sidebar-handle-arrow" style="font-size:13px; color:#64748b; pointer-events:none;">«</span>`;
+        document.body.appendChild(handle);
+
+        // Apply all necessary styles immediately
+        Object.assign(handle.style, {
+          position: 'fixed',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: '22px',
+          height: '64px',
+          background: '#1f232b',
+          border: '1px solid #3a3f49',
+          borderRight: 'none',
+          borderRadius: '9999px 0 0 9999px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: '50',
+          boxShadow: '-2px 0 8px rgba(0,0,0,0.45)'
+        });
+      }
+
+      // Start closed with handle on the far right
+      sidebar.classList.add('closed');
+      sidebar.style.transform = 'translateX(100%)';
+      handle.style.right = '0px';
+
+      function setSidebarState(open) {
+        // No transitions - instant snap as requested
+        if (open) {
+          sidebar.classList.remove('closed');
+          sidebar.classList.add('open');
+          sidebar.style.transform = 'translateX(0)';
+          handle.style.right = '320px';
+        } else {
+          sidebar.classList.remove('open');
+          sidebar.classList.add('closed');
+          sidebar.style.transform = 'translateX(100%)';
+          handle.style.right = '0px';
+        }
+
+        // Update arrow direction
+        const arrow = document.getElementById('sidebar-handle-arrow');
+        if (arrow) arrow.textContent = open ? '»' : '«';
+      }
+
+      // Simple click-to-toggle. No drag logic at all.
+      handle.addEventListener('click', () => {
+        const isOpen = sidebar.classList.contains('open');
+        setSidebarState(!isOpen);
+      });
+
+      // Make sure we start with the correct visual state
+      const arrow = document.getElementById('sidebar-handle-arrow');
+      if (arrow) arrow.textContent = '«';
+    }
+
+
+
+
+
+    function showConcepts() {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center p-6';
+      modal.innerHTML = `
+        <div class="max-w-2xl w-full panel rounded-3xl p-8 text-slate-200 elegant-shadow max-h-[85vh] overflow-y-auto">
+          <div class="flex justify-between items-start mb-6">
+            <div>
+              <div class="font-display text-3xl tracking-tighter">How This Works</div>
+              <div class="text-cyan-400/80 text-sm mt-1">Elegant real-time ray marching</div>
+            </div>
+            <button onclick="this.closest('.fixed').remove()" 
+                    class="text-slate-400 hover:text-white text-3xl leading-none mt-1">×</button>
+          </div>
+
+          <div class="space-y-6 text-sm leading-relaxed text-slate-300">
+            <div>
+              <div class="font-medium text-white mb-1">Signed Distance Fields (SDF)</div>
+              <div>Instead of storing triangles, every object is described by a mathematical function that returns the exact distance to its surface. This allows incredibly smooth, artifact-free rendering.</div>
+            </div>
+            
+            <div>
+              <div class="font-medium text-white mb-1">Ray Marching</div>
+              <div>The camera shoots rays into the scene. Instead of intersecting geometry, the ray repeatedly “marches” forward by the distance returned from the SDF. When the distance becomes tiny, we have hit a surface.</div>
+            </div>
+
+            <div>
+              <div class="font-medium text-white mb-1">Soft Shadows &amp; Ambient Occlusion</div>
+              <div>Shadows are computed by marching rays toward the sun. Multiple samples with increasing penumbra create beautiful soft shadows. Ambient occlusion is approximated by sampling how much the SDF “opens up” around each point.</div>
+            </div>
+
+            <div>
+              <div class="font-medium text-white mb-1">Reflections &amp; Materials</div>
+              <div>At each surface we compute the reflection ray and march again. Different material IDs receive different shading models (matte, mirror chrome, warm gold, cool glass).</div>
+            </div>
+          </div>
+
+          <div class="mt-8 pt-5 border-t border-slate-700 text-xs text-slate-400 flex items-center justify-between">
+            <div>291 lines of GLSL. Runs entirely on your GPU.</div>
+            <div class="text-cyan-400/70">Pure mathematics. No meshes.</div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    }
+
+    // ==================== BOOTSTRAP ====================
+    function bootstrap() {
+      const success = initWebGL();
+      if (!success) return;
+
+      // Early viewport size calculation (before the timeout)
+      requestAnimationFrame(() => {
+        if (typeof updateViewportSize === 'function') updateViewportSize();
+      });
+
+      // Initialize the simple drawer sidebar (it controls its own starting closed state)
+      initSidebarDrawer();
+
+      // Set initial slider values to match defaults
+      setTimeout(() => {
+        document.getElementById('stepsValue').textContent = quality.maxSteps;
+        document.getElementById('bouncesValue').textContent = quality.bounces;
+        document.getElementById('objectsValue').textContent = '9';
+        
+        // Nice initial camera animation hint
+        canvas.style.cursor = 'grab';
+
+        // Make sure the viewport sized correctly after layout
+        updateViewportSize();
+      }, 180);
+
+      // Keyboard hint
+      console.log('%c[Ray March] Drag to orbit • Scroll to zoom • R to reset • Arrow keys to pan target', 'color:#475569');
+    }
+
+    window.onload = bootstrap;
+
+    // Easter egg: click logo area to randomize sun angle slightly
+    document.addEventListener('click', function(e) {
+      const header = document.querySelector('.border-b.border-slate-800');
+      if (header && header.contains(e.target) && window.gl && window.uSunIntensity) {
+        const gl = window.gl;
+        const current = parseFloat(document.getElementById('sunValue').textContent);
+        const newVal = Math.max(0.6, Math.min(1.6, current * (0.85 + Math.random() * 0.3)));
+        gl.uniform1f(gl.getUniformLocation(gl.getParameter(gl.CURRENT_PROGRAM), 'uSunIntensity'), newVal);
+        document.getElementById('sunValue').textContent = newVal.toFixed(2);
+        document.getElementById('sunSlider').value = newVal;
+      }
+    }, true);
+  </script>
+</body>
+</html>
