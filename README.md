@@ -1,37 +1,46 @@
 # Elegant Ray March
 
-A compact, elegant real-time signed distance field (SDF) ray marcher written entirely in WebGL.
+A compact, elegant real-time ray marcher built entirely in WebGL using signed distance fields.
 
-**Live Demo:** https://rayoque.github.io/elegant-ray-march
+**Live Demo:** [https://rayoque.github.io/elegant-ray-march](https://rayoque.github.io/elegant-ray-march)
+
+![Elegant Ray March](assets/screenshot.png)
 
 ## Features
 
-- Real-time ray marching completely on the GPU
-- Multiple materials (matte, chrome, gold, glass)
-- Soft shadows + ambient occlusion
+- **Pure GPU rendering** — All ray marching and shading happens in the fragment shader
+- **291 lines of GLSL** — The entire rendering pipeline is written in a single shader
+- Multiple materials with realistic lighting (matte, chrome, gold, glass)
+- Soft shadows and ambient occlusion
 - Reflections (up to 3 bounces)
-- Smooth camera controls (mouse orbit + WASD movement)
-- Two scenes: Classic and Sculpture (with moving elements)
-- Simple two-state sidebar with controls
-- Fully self-contained single HTML file
+- Smooth camera controls (mouse orbit + keyboard movement)
+- Two distinct scenes: Classic and Sculpture (with animated elements)
+- Responsive sidebar with real-time controls
+- Fully self-contained — no build step required
 
 ## Controls
 
-- **Mouse drag** — Orbit the camera
-- **Scroll wheel** — Zoom in/out
-- **WASD / Arrow keys** — Move the target (camera-relative)
-- **Q / E** — Move up and down
-- **Shift** — Faster movement
-- **R** — Reset camera
+| Input              | Action                              |
+|--------------------|-------------------------------------|
+| Mouse Drag        | Orbit the camera                    |
+| Scroll Wheel      | Zoom in/out                         |
+| W / A / S / D     | Move camera target (camera-relative)|
+| Arrow Keys        | Same as WASD                        |
+| Q / E             | Move up / down                      |
+| Shift             | Increase movement speed             |
+| R                 | Reset camera                        |
+
+## Scenes
+
+- **Classic** — A balanced scene with varied materials and interesting geometry.
+- **Sculpture** — Features a central kinetic sculpture with a moving orbiting sphere.
 
 ## Running Locally
 
-Just open `index.html` in any modern browser. No build step or dependencies required.
-
-For a better experience, run a local server:
+Open `index.html` in any modern browser. For the best experience, use a local server:
 
 ```bash
-# Python
+# Python 3
 python -m http.server 8000
 
 # Then open http://localhost:8000
@@ -39,18 +48,25 @@ python -m http.server 8000
 
 ## Technology
 
-- Pure WebGL (no frameworks)
-- ~290 lines of GLSL
-- All rendering happens in the fragment shader on the GPU
+- Pure WebGL (no external runtime dependencies)
+- **291 lines of GLSL** in the fragment shader
+- All rendering happens on the GPU
+- Intentionally kept as a single HTML file for simplicity
 
-## Development Philosophy
+## Development
 
-This project is deliberately kept as a **single HTML file** for maximum simplicity and zero build tools. The entire application (UI, controls, and the ray marcher) lives in one file.
+This project is deliberately maintained as one self-contained HTML file. There are no build tools, bundlers, or separate CSS/JS files. This makes it trivial to host, share, or fork.
+
+If you'd like a split version (separate HTML, CSS, and JS) for easier long-term maintenance, let me know.
+
+## Acknowledgments
+
+This project was developed with assistance from **Grok Build** (by xAI).
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
-Made with curiosity and far too many iterations.
+Built with curiosity, iteration, and a healthy disregard for "best practices" in the name of simplicity.
